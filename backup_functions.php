@@ -117,76 +117,149 @@ function sendBackupToTelegram() {
 }
 
 /**
- * Restore backup from Telegram message
+ * Restore backup from Telegram message - IMPROVED VERSION
  */
 function restoreBackupFromTelegram($fileId) {
     $botToken = BOT_TOKEN;
     
+    error_log("=== Starting restore process ===");
+    error_log("File ID: {$fileId}");
+    error_log("Bot Token exists: " . (!empty($botToken) ? 'Yes' : 'No'));
+    
     // Step 1: Get file path from Telegram
     $fileUrl = "https://api.telegram.org/bot{$botToken}/getFile?file_id=" . urlencode($fileId);
+    error_log("Getting file from: {$fileUrl}");
     
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $fileUrl);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0');
     
     $response = curl_exec($ch);
-    $error = curl_error($ch);
-    curl_close($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     
-    if ($error) {
-        error_log("Failed to get file info: " . $error);
+    if (curl_errno($ch)) {
+        $error = curl_error($ch);
+        curl_close($ch);
+        error_log("CURL Error getting file info: {$error}");
         return false;
     }
     
+    curl_close($ch);
+    
+    error_log("HTTP Code: {$httpCode}");
+    error_log("Response: {$response}");
+    
     $fileInfo = json_decode($response, true);
     
-    if (!$fileInfo || !isset($fileInfo['ok']) || !$fileInfo['ok']) {
-        error_log("Invalid file info response: " . $response);
+    if (!$fileInfo) {
+        error_log("Failed to decode JSON response");
+        return false;
+    }
+    
+    if (!isset($fileInfo['ok']) || !$fileInfo['ok']) {
+        error_log("Telegram API error: " . json_encode($fileInfo));
+        return false;
+    }
+    
+    if (!isset($fileInfo['result']['file_path'])) {
+        error_log("No file_path in response");
         return false;
     }
     
     $filePath = $fileInfo['result']['file_path'];
     $downloadUrl = "https://api.telegram.org/file/bot{$botToken}/" . $filePath;
     
-    // Step 2: Download the file
+    error_log("Download URL: {$downloadUrl}");
+    
+    // Step 2: Download file with progress logging
+    $tempFile = __DIR__ . '/temp_backup_' . time() . '.json';
+    
+    $fp = fopen($tempFile, 'w+');
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $downloadUrl);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_FILE, $fp);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     curl_setopt($ch, CURLOPT_TIMEOUT, 60);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0');
     
-    $backupData = curl_exec($ch);
-    $error = curl_error($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $downloadResult = curl_exec($ch);
+    $downloadError = curl_error($ch);
+    $downloadSize = curl_getinfo($ch, CURLINFO_SIZE_DOWNLOAD);
+    
     curl_close($ch);
+    fclose($fp);
     
-    if ($error || $httpCode != 200) {
-        error_log("Failed to download backup file. HTTP Code: {$httpCode}, Error: {$error}");
+    if (!$downloadResult) {
+        error_log("Download failed: {$downloadError}");
+        if (file_exists($tempFile)) unlink($tempFile);
         return false;
     }
+    
+    error_log("Downloaded size: {$downloadSize} bytes");
+    error_log("Temp file created: {$tempFile}");
+    
+    if (!file_exists($tempFile)) {
+        error_log("Temp file not created after download");
+        return false;
+    }
+    
+    $fileSize = filesize($tempFile);
+    error_log("Actual file size: {$fileSize} bytes");
+    
+    if ($fileSize < 10) {
+        error_log("File too small, probably empty");
+        unlink($tempFile);
+        return false;
+    }
+    
+    // Step 3: Read and validate file
+    $backupData = file_get_contents($tempFile);
     
     if (!$backupData) {
-        error_log("Downloaded backup data is empty");
+        error_log("Failed to read temp file");
+        unlink($tempFile);
         return false;
     }
     
-    // Step 3: Validate JSON
+    // Check first few characters
+    $first100 = substr($backupData, 0, 100);
+    error_log("First 100 chars: {$first100}");
+    
     $jsonData = json_decode($backupData, true);
     if (json_last_error() !== JSON_ERROR_NONE) {
-        error_log("Invalid JSON in backup: " . json_last_error_msg());
+        error_log("JSON decode error: " . json_last_error_msg());
+        error_log("Sample data (500 chars): " . substr($backupData, 0, 500));
+        unlink($tempFile);
         return false;
     }
     
-    // Step 4: Validate data structure
-    if (!isset($jsonData['users']) || !isset($jsonData['system'])) {
-        error_log("Invalid backup structure - missing users or system");
+    error_log("JSON decoded successfully");
+    
+    // Validate structure
+    if (!isset($jsonData['users'])) {
+        error_log("Missing 'users' key in backup");
+        unlink($tempFile);
         return false;
     }
     
-    // Step 5: Create backup of current data before restoring
+    $userCount = count($jsonData['users']);
+    error_log("Found {$userCount} users in backup");
+    
+    // Add system array if missing
+    if (!isset($jsonData['system'])) {
+        error_log("Adding missing system array");
+        $jsonData['system'] = [
+            'total_spins_today' => 0,
+            'total_games_today' => 0,
+            'last_reset' => date('Y-m-d')
+        ];
+    }
+    
+    // Step 4: Backup current data
     $currentFile = __DIR__ . '/users_backup.json';
     if (file_exists($currentFile)) {
         $backupDir = __DIR__ . '/backups';
@@ -194,28 +267,41 @@ function restoreBackupFromTelegram($fileId) {
             mkdir($backupDir, 0755, true);
         }
         
-        $backupName = $backupDir . '/users_backup_restore_backup_' . date('Ymd_His') . '.json';
-        $backupResult = copy($currentFile, $backupName);
-        
-        if ($backupResult) {
+        $backupName = $backupDir . '/pre_restore_' . date('Ymd_His') . '.json';
+        if (copy($currentFile, $backupName)) {
             error_log("Current data backed up to: {$backupName}");
         } else {
             error_log("Failed to backup current data");
         }
     }
     
-    // Step 6: Save new data
+    // Step 5: Write new data
     $result = file_put_contents($currentFile, json_encode($jsonData, JSON_PRETTY_PRINT));
     
     if ($result === false) {
-        error_log("Failed to write backup file");
+        error_log("Failed to write to users_backup.json");
+        unlink($tempFile);
         return false;
     }
     
-    // Step 7: Update file permissions
+    // Step 6: Cleanup
+    if (file_exists($tempFile)) {
+        unlink($tempFile);
+    }
+    
+    // Set permissions
     chmod($currentFile, 0664);
     
-    error_log("Backup restored successfully from file ID: {$fileId}");
+    error_log("✅ Restore completed successfully!");
+    
+    // Get stats for logging
+    $totalCoins = 0;
+    foreach ($jsonData['users'] as $user) {
+        $totalCoins += $user['coins'] ?? 0;
+    }
+    
+    error_log("Restored stats - Users: {$userCount}, Total coins: {$totalCoins}");
+    
     return true;
 }
 
@@ -387,7 +473,7 @@ function handleBotcastCommand($chatId, $text, $messageId) {
 }
 
 /**
- * Handle restore command
+ * Handle restore command - IMPROVED VERSION
  */
 function handleRestoreCommand($chatId, $text, $message, $messageId) {
     // Check if user is admin
@@ -399,10 +485,11 @@ function handleRestoreCommand($chatId, $text, $message, $messageId) {
         return;
     }
     
+    error_log("Restore command called by admin: {$userId}");
+    
     // Check if replying to a backup file
-    if (!isset($message['reply_to_message']) || 
-        !isset($message['reply_to_message']['document'])) {
-        
+    if (!isset($message['reply_to_message'])) {
+        error_log("Not replying to any message");
         $instructions = "📂 *RESTORE BACKUP INSTRUCTIONS*\n\n" .
                        "1. Go to your backup channel\n" .
                        "2. Find a backup file (tanu_bot_backup_*.json)\n" .
@@ -415,12 +502,27 @@ function handleRestoreCommand($chatId, $text, $message, $messageId) {
     }
     
     $replyMsg = $message['reply_to_message'];
+    error_log("Reply message type: " . ($replyMsg['document'] ? 'document' : 'not document'));
+    
+    if (!isset($replyMsg['document'])) {
+        error_log("Reply message doesn't contain a document");
+        sendReplyMessage($chatId, 
+            "❌ *No file found!*\n\n" .
+            "Please reply to a backup file (JSON document).", 
+            $messageId, 'Markdown');
+        return;
+    }
+    
     $fileId = $replyMsg['document']['file_id'];
     $fileName = $replyMsg['document']['file_name'] ?? 'backup.json';
+    $fileSize = $replyMsg['document']['file_size'] ?? 0;
+    
+    error_log("File info - ID: {$fileId}, Name: {$fileName}, Size: {$fileSize}");
     
     // Check if file is JSON
     $extension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
     if ($extension !== 'json') {
+        error_log("Invalid file extension: {$extension}");
         sendReplyMessage($chatId, 
             "❌ *Invalid file type!*\n\n" .
             "Please select a JSON backup file.\n" .
@@ -431,7 +533,8 @@ function handleRestoreCommand($chatId, $text, $message, $messageId) {
     
     // Ask for confirmation
     $confirmMsg = "🔄 *RESTORE CONFIRMATION*\n\n" .
-                  "📁 File: `{$fileName}`\n\n" .
+                  "📁 File: `{$fileName}`\n" .
+                  "📊 Size: " . round($fileSize/1024) . " KB\n\n" .
                   "⚠️ *WARNING:* This will:\n" .
                   "• Replace ALL current user data\n" .
                   "• Current data will be backed up first\n" .
