@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8080:80"
+    volumes:
+      - ./:/var/www/html
+      - ./users_backup.json:/var/www/html/users_backup.json
+      - ./users.json:/var/www/html/users.json
+      - ./error.log:/var/www/html/error.log
+      - ./bot_data:/var/www/html/bot_data  # Optional: अगर SQLite use करें
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - WEBHOOK_URL=${WEBHOOK_URL}
+      - SECRET_TOKEN=${SECRET_TOKEN}
+      - ADMIN_ID=${ADMIN_ID}
+      - BOT_USERNAME=${BOT_USERNAME}
+      - DATA_GROUP_ID=${DATA_GROUP_ID}
+      - BACKUP_CHANNEL_ID=${BACKUP_CHANNEL_ID}  # NEW: Backup channel ID
+      - TZ=Asia/Kolkata
+    restart: unless-stopped
+    networks:
+      - tanu_bot_network
+
+networks:
+  tanu_bot_network:
+    driver: bridge

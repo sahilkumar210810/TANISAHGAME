@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: telegram-bot
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_ID
+        sync: false
+      - key: BOT_USERNAME
+        sync: false
+      - key: SECRET_TOKEN
+        generateValue: true
+      - key: WEBHOOK_URL
+        fromGroup: webhook_url
+      - key: BACKUP_CHANNEL_ID
+        sync: false
+      - key: DATA_GROUP_ID
+        sync: false
+      - key: TZ
+        value: Asia/Kolkata
+    healthCheckPath: /
+    autoDeploy: true
+
+envVarGroups:
+  - name: webhook_url
+    envVars:
+      - key: WEBHOOK_URL
+        value: https://tanisah-bot.onrender.com
