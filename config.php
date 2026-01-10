@@ -39,7 +39,7 @@ define('BOTCAST_COOLDOWN', 300); // 5 minutes between botcasts
 
 // NEW: GitHub Backup Settings
 define('GITHUB_BACKUP_URL', 'https://raw.githubusercontent.com/sahilkumar210810/TANISAHGAME/main/tanu_bot_backup.json');
-define('GITHUB_TOKEN', ''); // Optional, only for private repos
+define('GITHUB_TOKEN', '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'); // Optional, only for private repos
 
 // Spin Wheel Prizes
 $SPIN_PRIZES = [
