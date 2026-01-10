@@ -251,9 +251,6 @@ function getOrCreateUser($userId, $userData = null, $isBot = false) {
 function handleWebhook() {
     global $secretToken;
     
-    // DEBUG
-    error_log("=== WEBHOOK RECEIVED at " . date('Y-m-d H:i:s') . " ===");
-    
     // Verify secret token if provided
     $headers = getallheaders();
     if (isset($headers['X-Telegram-Bot-Api-Secret-Token']) && $headers['X-Telegram-Bot-Api-Secret-Token'] !== $secretToken) {
@@ -272,12 +269,6 @@ function handleWebhook() {
     
     // Store update globally for reference
     $GLOBALS['update'] = $update;
-    
-    // DEBUG: Log update type
-    if (isset($update['message'])) {
-        error_log("Message from: " . ($update['message']['from']['id'] ?? 'unknown'));
-        error_log("Text: " . ($update['message']['text'] ?? 'no text'));
-    }
     
     // Process the update
     processUpdate($update);
@@ -311,9 +302,6 @@ function handleMessage($message) {
     $isBot = $message['from']['is_bot'] ?? false;
     $text = $message['text'] ?? '';
     $chatType = $message['chat']['type'] ?? 'private';
-    
-    // DEBUG
-    error_log("Processing message: {$text} from {$userId}");
     
     // Store message info globally for reply functionality
     $GLOBALS['current_message'] = $message;
@@ -434,7 +422,7 @@ function handleMessage($message) {
     
     // For group chats, only respond to specific commands
     if (($chatType === 'group' || $chatType === 'supergroup')) {
-        $allowedCommands = ['/start', '/help', '/rob', '/bal', '/games', '/spin', '/leaderboard', '/safe', '/stats', '/testrestore'];
+        $allowedCommands = ['/start', '/help', '/rob', '/bal', '/games', '/spin', '/leaderboard', '/safe', '/stats'];
         $isCommand = strpos($text, '/') === 0;
         $isAllowed = false;
         
@@ -557,75 +545,19 @@ function handleMessage($message) {
             showHelp($chatId, $chatType, $message['message_id']);
             break;
             
-        // TEST COMMAND - ALWAYS RESPONDS
-        case $text === '/testrestore':
-            sendReplyMessage($chatId, 
-                "✅ Test command working!\n" .
-                "Chat ID: {$chatId}\n" .
-                "Message ID: {$message['message_id']}\n" .
-                "Your ID: {$userId}\n" .
-                "Admin ID: " . ADMIN_ID . "\n" .
-                "Bot Username: @" . BOT_USERNAME, 
-                $message['message_id'], 'Markdown');
-            break;
-            
-        // ADMIN COMMANDS - Only show to admin in private chat
-        case $text === '/admin' && $userId == ADMIN_ID && $chatType === 'private':
+        // ADMIN COMMANDS - Only through /admin command
+        case $text === '/admin' && $userId == ADMIN_ID:
             showAdminPanel($chatId, $message['message_id']);
             break;
-        case $text === '/addcoins' && $userId == ADMIN_ID && $chatType === 'private':
-            sendReplyMessage($chatId, "Usage: /addcoins USER_ID AMOUNT\nExample: /addcoins 123456 1000", $message['message_id'], 'Markdown');
-            break;
-        case strpos($text, '/addcoins ') === 0 && $userId == ADMIN_ID && $chatType === 'private':
-            handleAddCoins($chatId, $text, $message['message_id']);
-            break;
-        case $text === '/resetspins' && $userId == ADMIN_ID && $chatType === 'private':
-            showResetSpinsOptions($chatId, $message['message_id']);
-            break;
-        case strpos($text, '/resetspins ') === 0 && $userId == ADMIN_ID && $chatType === 'private':
-            handleResetSpins($chatId, $text, $message, $message['message_id']);
-            break;
-        case $text === '/userinfo' && $userId == ADMIN_ID && $chatType === 'private':
-            sendReplyMessage($chatId, "Usage: /userinfo USER_ID\nExample: /userinfo 123456", $message['message_id'], 'Markdown');
-            break;
-        case strpos($text, '/userinfo ') === 0 && $userId == ADMIN_ID && $chatType === 'private':
-            handleUserInfo($chatId, $text, $message['message_id']);
-            break;
             
-        // NEW BACKUP/RESTORE/BOTCAST COMMANDS - FIXED VERSION
-        case $text === '/backup':
-            // Admin check will be done inside function
-            handleBackupCommand($chatId, $message['message_id']);
-            break;
-            
-        case $text === '/restore':
-            // Admin check will be done inside function
-            handleRestoreCommand($chatId, $text, $message, $message['message_id']);
-            break;
-            
-        case strpos($text, '/botcast ') === 0:
-            // Admin check will be done inside function
-            handleBotcastCommand($chatId, $text, $message['message_id']);
-            break;
-            
-        // NEW DIRECT RESTORE COMMAND
-        case $text === '/restoredirect':
-            // Admin check will be done inside function
-            // Check if document is attached
-            if (isset($message['document'])) {
-                handleDirectRestore($chatId, $message, $message['message_id']);
-            } else {
-                sendReplyMessage($chatId, 
-                    "❌ *No file attached!*\n\n" .
-                    "Please send a JSON backup file directly with this command.", 
-                    $message['message_id'], 'Markdown');
-            }
+        // Handle admin commands through /admin parameter
+        case strpos($text, '/admin ') === 0 && $userId == ADMIN_ID:
+            handleAdminCommand($chatId, $text, $message, $message['message_id']);
             break;
             
         // For non-admin users trying admin commands
-        case in_array(explode(' ', $text)[0], ['/admin', '/addcoins', '/resetspins', '/userinfo', '/backup', '/restore', '/botcast', '/restoredirect']) && $userId != ADMIN_ID:
+        case in_array(explode(' ', $text)[0], ['/admin', '/addcoins', '/resetspins', '/userinfo', '/backup', '/botcast']) && $userId != ADMIN_ID:
             // NO RESPONSE - Bot won't reply to non-admins for admin commands
-            error_log("Non-admin {$userId} tried admin command: {$text}");
             break;
             
         default:
@@ -635,6 +567,64 @@ function handleMessage($message) {
             }
             // For groups, ignore non-command messages completely
             break;
+    }
+}
+
+// ============================================
+// ADMIN COMMAND HANDLER
+// ============================================
+
+/**
+ * Handle admin commands through /admin
+ */
+function handleAdminCommand($chatId, $text, $message, $messageId) {
+    $parts = explode(' ', $text, 2);
+    $command = $parts[1] ?? '';
+    
+    if (strpos($command, 'addcoins ') === 0) {
+        handleAddCoins($chatId, '/admin ' . $command, $messageId);
+    } elseif (strpos($command, 'resetspins ') === 0) {
+        handleResetSpins($chatId, '/admin ' . $command, $message, $messageId);
+    } elseif (strpos($command, 'userinfo ') === 0) {
+        handleUserInfo($chatId, '/admin ' . $command, $messageId);
+    } elseif ($command === 'backup') {
+        handleBackupCommand($chatId, $messageId);
+    } elseif (strpos($command, 'botcast ') === 0) {
+        handleBotcastCommand($chatId, '/admin ' . $command, $messageId);
+    } elseif ($command === 'help') {
+        showAdminHelp($chatId, $messageId);
+    } else {
+        sendReplyMessage($chatId, 
+            "❌ *Invalid admin command!*\n\n" .
+            "Use: `/admin help` for available admin commands", 
+            $messageId, 'Markdown');
+    }
+}
+
+/**
+ * Show admin help
+ */
+function showAdminHelp($chatId, $replyToMsgId = null) {
+    $message = "🛡️ *ADMIN COMMANDS HELP*\n\n" .
+               "All admin commands must start with `/admin`\n\n" .
+               "📋 *Available Commands:*\n" .
+               "• `/admin addcoins USER_ID AMOUNT` - Add coins\n" .
+               "• `/admin resetspins OPTION` - Reset spins\n" .
+               "• `/admin userinfo USER_ID` - User information\n" .
+               "• `/admin backup` - Create data backup\n" .
+               "• `/admin botcast MESSAGE` - Broadcast message\n" .
+               "• `/admin help` - This help message\n\n" .
+               "⚙️ *Reset Spins Options:*\n" .
+               "1. `/admin resetspins` (reply to user)\n" .
+               "2. `/admin resetspins @username`\n" .
+               "3. `/admin resetspins USER_ID`\n" .
+               "4. `/admin resetspins allusers`\n\n" .
+               "⚠️ *For Owner Use Only*";
+    
+    if ($replyToMsgId) {
+        sendReplyMessage($chatId, $message, $replyToMsgId, 'Markdown');
+    } else {
+        sendMessage($chatId, $message, 'Markdown');
     }
 }
 
@@ -1021,8 +1011,8 @@ function showResetSpinsOptions($chatId, $replyToMsgId = null) {
 function handleResetSpins($chatId, $text, $message, $replyToMsgId = null) {
     $parts = explode(' ', $text);
     
-    if (count($parts) !== 2) {
-        $errorMsg = "❌ *Invalid format!*\n\nUsage: `/resetspins USER_ID` or `/resetspins @username` or `/resetspins allusers`";
+    if (count($parts) !== 3) {
+        $errorMsg = "❌ *Invalid format!*\n\nUsage: `/admin resetspins USER_ID` or `/admin resetspins @username` or `/admin resetspins allusers`";
         if ($replyToMsgId) {
             sendReplyMessage($chatId, $errorMsg, $replyToMsgId, 'Markdown');
         } else {
@@ -1031,7 +1021,7 @@ function handleResetSpins($chatId, $text, $message, $replyToMsgId = null) {
         return;
     }
     
-    $target = $parts[1];
+    $target = $parts[2];
     $data = getUsersData();
     $resetCount = 0;
     $notifiedUsers = [];
@@ -1251,8 +1241,8 @@ function showAdminPanel($chatId, $replyToMsgId = null) {
 function handleAddCoins($chatId, $text, $replyToMsgId = null) {
     $parts = explode(' ', $text);
     
-    if (count($parts) !== 3) {
-        $errorMsg = "❌ *Invalid format!*\n\nUsage: `/addcoins USER_ID AMOUNT`";
+    if (count($parts) !== 4) {
+        $errorMsg = "❌ *Invalid format!*\n\nUsage: `/admin addcoins USER_ID AMOUNT`";
         if ($replyToMsgId) {
             sendReplyMessage($chatId, $errorMsg, $replyToMsgId, 'Markdown');
         } else {
@@ -1261,8 +1251,8 @@ function handleAddCoins($chatId, $text, $replyToMsgId = null) {
         return;
     }
     
-    $targetId = $parts[1];
-    $amount = intval($parts[2]);
+    $targetId = $parts[2];
+    $amount = intval($parts[3]);
     
     if ($amount <= 0) {
         $errorMsg = "❌ Amount must be positive!";
@@ -1320,8 +1310,8 @@ function handleAddCoins($chatId, $text, $replyToMsgId = null) {
 function handleUserInfo($chatId, $text, $replyToMsgId = null) {
     $parts = explode(' ', $text);
     
-    if (count($parts) !== 2) {
-        $errorMsg = "❌ *Invalid format!*\n\nUsage: `/userinfo USER_ID`";
+    if (count($parts) !== 3) {
+        $errorMsg = "❌ *Invalid format!*\n\nUsage: `/admin userinfo USER_ID`";
         if ($replyToMsgId) {
             sendReplyMessage($chatId, $errorMsg, $replyToMsgId, 'Markdown');
         } else {
@@ -1330,7 +1320,7 @@ function handleUserInfo($chatId, $text, $replyToMsgId = null) {
         return;
     }
     
-    $targetId = $parts[1];
+    $targetId = $parts[2];
     $data = getUsersData();
     
     // AUTO CREATE USER IF NOT EXISTS
@@ -2099,81 +2089,6 @@ function handleCallbackQuery($callbackQuery) {
                 'parse_mode' => 'Markdown'
             ]);
             break;
-            
-        // Restore confirmation
-        case (strpos($data, 'confirm_restore_') === 0):
-            $fileId = str_replace('confirm_restore_', '', $data);
-            
-            // Update message to show processing
-            apiRequest('editMessageText', [
-                'chat_id' => $chatId,
-                'message_id' => $messageId,
-                'text' => "🔄 *RESTORING BACKUP...*\n\n⏳ Please wait...",
-                'parse_mode' => 'Markdown'
-            ]);
-            
-            // Restore backup
-            $result = restoreBackupFromTelegram($fileId);
-            
-            if ($result) {
-                // Get restored data stats
-                $data = getUsersData();
-                $totalUsers = count($data['users']);
-                $totalCoins = 0;
-                
-                foreach ($data['users'] as $user) {
-                    $totalCoins += $user['coins'] ?? 0;
-                }
-                
-                $successMsg = "✅ *BACKUP RESTORED SUCCESSFULLY!*\n\n" .
-                             "📊 *Restored Stats:*\n" .
-                             "👥 Users: {$totalUsers}\n" .
-                             "💰 Total Coins: " . number_format($totalCoins) . "\n\n" .
-                             "🎮 Bot is now using the restored data.\n" .
-                             "✅ Previous data was backed up.";
-                
-                apiRequest('editMessageText', [
-                    'chat_id' => $chatId,
-                    'message_id' => $messageId,
-                    'text' => $successMsg,
-                    'parse_mode' => 'Markdown'
-                ]);
-                
-                // Send notification to backup channel
-                $backupNotice = "🔄 *DATA RESTORED*\n\n" .
-                               "Bot data was restored by admin.\n" .
-                               "📅 Time: " . date('d/m/Y H:i:s') . "\n" .
-                               "👥 Users restored: {$totalUsers}\n" .
-                               "💰 Total coins: " . number_format($totalCoins);
-                
-                sendMessage(BACKUP_CHANNEL_ID, $backupNotice, 'Markdown');
-                
-            } else {
-                $errorMsg = "❌ *RESTORE FAILED!*\n\n" .
-                           "Could not restore backup.\n" .
-                           "Possible issues:\n" .
-                           "• Invalid backup file format\n" .
-                           "• File corrupted\n" .
-                           "• Network error\n\n" .
-                           "Please try again with a valid backup file.";
-                
-                apiRequest('editMessageText', [
-                    'chat_id' => $chatId,
-                    'message_id' => $messageId,
-                    'text' => $errorMsg,
-                    'parse_mode' => 'Markdown'
-                ]);
-            }
-            break;
-            
-        case 'cancel_restore':
-            apiRequest('editMessageText', [
-                'chat_id' => $chatId,
-                'message_id' => $messageId,
-                'text' => "❌ *RESTORE CANCELLED*",
-                'parse_mode' => 'Markdown'
-            ]);
-            break;
     }
     
     // Answer callback query
@@ -2532,7 +2447,7 @@ function showInfo() {
                 <p><strong>• 🔗 PROFILE LINKS:</strong> Click on user names to open their profiles</p>
                 <p><strong>• 👥 GROUP LINKS:</strong> Click on group links to jump to robbery location</p>
                 <p><strong>• 💬 REPLY SYSTEM:</strong> Bot now replies to user messages</p>
-                <p><strong>• 💾 BACKUP SYSTEM:</strong> New admin commands: /backup, /restore, /botcast, /restoredirect</p>
+                <p><strong>• 💾 BACKUP SYSTEM:</strong> Admin commands now through /admin only</p>
             </div>
             
             <div class="feature-grid">
@@ -2548,8 +2463,8 @@ function showInfo() {
                 </div>
                 <div class="feature">
                     <div class="feature-icon">💾</div>
-                    <h3>Backup System</h3>
-                    <p>Data backup & restore</p>
+                    <h3>Admin System</h3>
+                    <p>All admin commands in /admin</p>
                 </div>
                 <div class="feature">
                     <div class="feature-icon">📢</div>
@@ -2569,12 +2484,13 @@ function showInfo() {
                 <p><code>/stats</code> - Your statistics</p>
                 <p><code>/leaderboard</code> - Top players</p>
                 <p><code>/help</code> - Help guide</p>
-                <h4>🔧 ADMIN COMMANDS:</h4>
-                <p><code>/backup</code> - Create data backup</p>
-                <p><code>/restore</code> - Restore from backup (reply to file)</p>
-                <p><code>/restoredirect</code> - Restore (send file directly)</p>
-                <p><code>/botcast message</code> - Broadcast to all users</p>
-                <p><code>/testrestore</code> - Test command for debugging</p>
+                <h4>🔧 ADMIN COMMANDS (Use with /admin):</h4>
+                <p><code>/admin addcoins USER_ID AMOUNT</code> - Add coins</p>
+                <p><code>/admin resetspins OPTION</code> - Reset spins</p>
+                <p><code>/admin userinfo USER_ID</code> - User information</p>
+                <p><code>/admin backup</code> - Create data backup</p>
+                <p><code>/admin botcast message</code> - Broadcast to all users</p>
+                <p><code>/admin help</code> - Admin commands help</p>
             </div>
             
             <div class="status success">
@@ -2583,11 +2499,11 @@ function showInfo() {
                 • 👤 <b>Smart Mentions:</b> All users are mentioned with clickable profile links<br>
                 • 🔗 <b>Group Links:</b> Clickable links to jump to robbery location<br>
                 • 💬 <b>Reply System:</b> Bot replies to user commands<br>
+                • 🛡️ <b>Admin System:</b> All admin commands now through /admin only<br>
                 • 🚨 <b>/rob Command:</b> Use /rob instead of /steal<br>
                 • 💰 <b>/bal Only:</b> Removed /coins command<br>
-                • 💾 <b>Backup System:</b> New admin commands for data management<br>
                 • 📢 <b>Broadcast:</b> Send messages to all users<br>
-                • 🔄 <b>Restore Fixed:</b> Multiple restore methods available
+                • 🔄 <b>Restore Removed:</b> restore and restoredirect commands removed
             </div>
         </div>
     </body>
