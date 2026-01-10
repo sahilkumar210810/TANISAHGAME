@@ -11,7 +11,7 @@ function getWelcomeMessage() {
     return "🎉 *Welcome to Tanisah Bot!*\n\n" .
            "This is a gaming bot where you can:\n" .
            "• Earn Tanu Coins through games\n" .
-           "• Steal coins from other players\n" .
+           "• Rob coins from other players\n" .
            "• Protect your coins in Safe Zone\n" .
            "• See top players ranking\n\n" .
            "Click the buttons below to get started:";
