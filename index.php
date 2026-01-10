@@ -545,14 +545,39 @@ function handleMessage($message) {
             showHelp($chatId, $chatType, $message['message_id']);
             break;
             
-        // ADMIN COMMANDS - Only through /admin command
+        // ADMIN COMMANDS - Only show to admin
         case $text === '/admin' && $userId == ADMIN_ID:
             showAdminPanel($chatId, $message['message_id']);
             break;
             
-        // Handle admin commands through /admin parameter
-        case strpos($text, '/admin ') === 0 && $userId == ADMIN_ID:
-            handleAdminCommand($chatId, $text, $message, $message['message_id']);
+        case $text === '/addcoins' && $userId == ADMIN_ID:
+            sendReplyMessage($chatId, "Usage: /addcoins USER_ID AMOUNT\nExample: /addcoins 123456 1000", $message['message_id'], 'Markdown');
+            break;
+        case strpos($text, '/addcoins ') === 0 && $userId == ADMIN_ID:
+            handleAddCoins($chatId, $text, $message['message_id']);
+            break;
+            
+        case $text === '/resetspins' && $userId == ADMIN_ID:
+            showResetSpinsOptions($chatId, $message['message_id']);
+            break;
+        case strpos($text, '/resetspins ') === 0 && $userId == ADMIN_ID:
+            handleResetSpins($chatId, $text, $message, $message['message_id']);
+            break;
+            
+        case $text === '/userinfo' && $userId == ADMIN_ID:
+            sendReplyMessage($chatId, "Usage: /userinfo USER_ID\nExample: /userinfo 123456", $message['message_id'], 'Markdown');
+            break;
+        case strpos($text, '/userinfo ') === 0 && $userId == ADMIN_ID:
+            handleUserInfo($chatId, $text, $message['message_id']);
+            break;
+            
+        // BACKUP/BOTCAST COMMANDS
+        case $text === '/backup' && $userId == ADMIN_ID:
+            handleBackupCommand($chatId, $message['message_id']);
+            break;
+            
+        case strpos($text, '/botcast ') === 0 && $userId == ADMIN_ID:
+            handleBotcastCommand($chatId, $text, $message['message_id']);
             break;
             
         // For non-admin users trying admin commands
@@ -567,64 +592,6 @@ function handleMessage($message) {
             }
             // For groups, ignore non-command messages completely
             break;
-    }
-}
-
-// ============================================
-// ADMIN COMMAND HANDLER
-// ============================================
-
-/**
- * Handle admin commands through /admin
- */
-function handleAdminCommand($chatId, $text, $message, $messageId) {
-    $parts = explode(' ', $text, 2);
-    $command = $parts[1] ?? '';
-    
-    if (strpos($command, 'addcoins ') === 0) {
-        handleAddCoins($chatId, '/admin ' . $command, $messageId);
-    } elseif (strpos($command, 'resetspins ') === 0) {
-        handleResetSpins($chatId, '/admin ' . $command, $message, $messageId);
-    } elseif (strpos($command, 'userinfo ') === 0) {
-        handleUserInfo($chatId, '/admin ' . $command, $messageId);
-    } elseif ($command === 'backup') {
-        handleBackupCommand($chatId, $messageId);
-    } elseif (strpos($command, 'botcast ') === 0) {
-        handleBotcastCommand($chatId, '/admin ' . $command, $messageId);
-    } elseif ($command === 'help') {
-        showAdminHelp($chatId, $messageId);
-    } else {
-        sendReplyMessage($chatId, 
-            "❌ *Invalid admin command!*\n\n" .
-            "Use: `/admin help` for available admin commands", 
-            $messageId, 'Markdown');
-    }
-}
-
-/**
- * Show admin help
- */
-function showAdminHelp($chatId, $replyToMsgId = null) {
-    $message = "🛡️ *ADMIN COMMANDS HELP*\n\n" .
-               "All admin commands must start with `/admin`\n\n" .
-               "📋 *Available Commands:*\n" .
-               "• `/admin addcoins USER_ID AMOUNT` - Add coins\n" .
-               "• `/admin resetspins OPTION` - Reset spins\n" .
-               "• `/admin userinfo USER_ID` - User information\n" .
-               "• `/admin backup` - Create data backup\n" .
-               "• `/admin botcast MESSAGE` - Broadcast message\n" .
-               "• `/admin help` - This help message\n\n" .
-               "⚙️ *Reset Spins Options:*\n" .
-               "1. `/admin resetspins` (reply to user)\n" .
-               "2. `/admin resetspins @username`\n" .
-               "3. `/admin resetspins USER_ID`\n" .
-               "4. `/admin resetspins allusers`\n\n" .
-               "⚠️ *For Owner Use Only*";
-    
-    if ($replyToMsgId) {
-        sendReplyMessage($chatId, $message, $replyToMsgId, 'Markdown');
-    } else {
-        sendMessage($chatId, $message, 'Markdown');
     }
 }
 
@@ -1011,8 +978,8 @@ function showResetSpinsOptions($chatId, $replyToMsgId = null) {
 function handleResetSpins($chatId, $text, $message, $replyToMsgId = null) {
     $parts = explode(' ', $text);
     
-    if (count($parts) !== 3) {
-        $errorMsg = "❌ *Invalid format!*\n\nUsage: `/admin resetspins USER_ID` or `/admin resetspins @username` or `/admin resetspins allusers`";
+    if (count($parts) !== 2) {
+        $errorMsg = "❌ *Invalid format!*\n\nUsage: `/resetspins USER_ID` or `/resetspins @username` or `/resetspins allusers`";
         if ($replyToMsgId) {
             sendReplyMessage($chatId, $errorMsg, $replyToMsgId, 'Markdown');
         } else {
@@ -1021,7 +988,7 @@ function handleResetSpins($chatId, $text, $message, $replyToMsgId = null) {
         return;
     }
     
-    $target = $parts[2];
+    $target = $parts[1];
     $data = getUsersData();
     $resetCount = 0;
     $notifiedUsers = [];
@@ -1241,8 +1208,8 @@ function showAdminPanel($chatId, $replyToMsgId = null) {
 function handleAddCoins($chatId, $text, $replyToMsgId = null) {
     $parts = explode(' ', $text);
     
-    if (count($parts) !== 4) {
-        $errorMsg = "❌ *Invalid format!*\n\nUsage: `/admin addcoins USER_ID AMOUNT`";
+    if (count($parts) !== 3) {
+        $errorMsg = "❌ *Invalid format!*\n\nUsage: `/addcoins USER_ID AMOUNT`";
         if ($replyToMsgId) {
             sendReplyMessage($chatId, $errorMsg, $replyToMsgId, 'Markdown');
         } else {
@@ -1251,8 +1218,8 @@ function handleAddCoins($chatId, $text, $replyToMsgId = null) {
         return;
     }
     
-    $targetId = $parts[2];
-    $amount = intval($parts[3]);
+    $targetId = $parts[1];
+    $amount = intval($parts[2]);
     
     if ($amount <= 0) {
         $errorMsg = "❌ Amount must be positive!";
@@ -1310,8 +1277,8 @@ function handleAddCoins($chatId, $text, $replyToMsgId = null) {
 function handleUserInfo($chatId, $text, $replyToMsgId = null) {
     $parts = explode(' ', $text);
     
-    if (count($parts) !== 3) {
-        $errorMsg = "❌ *Invalid format!*\n\nUsage: `/admin userinfo USER_ID`";
+    if (count($parts) !== 2) {
+        $errorMsg = "❌ *Invalid format!*\n\nUsage: `/userinfo USER_ID`";
         if ($replyToMsgId) {
             sendReplyMessage($chatId, $errorMsg, $replyToMsgId, 'Markdown');
         } else {
@@ -1320,7 +1287,7 @@ function handleUserInfo($chatId, $text, $replyToMsgId = null) {
         return;
     }
     
-    $targetId = $parts[2];
+    $targetId = $parts[1];
     $data = getUsersData();
     
     // AUTO CREATE USER IF NOT EXISTS
@@ -2447,7 +2414,7 @@ function showInfo() {
                 <p><strong>• 🔗 PROFILE LINKS:</strong> Click on user names to open their profiles</p>
                 <p><strong>• 👥 GROUP LINKS:</strong> Click on group links to jump to robbery location</p>
                 <p><strong>• 💬 REPLY SYSTEM:</strong> Bot now replies to user messages</p>
-                <p><strong>• 💾 BACKUP SYSTEM:</strong> Admin commands now through /admin only</p>
+                <p><strong>• 🛡️ DIRECT ADMIN COMMANDS:</strong> Admin can use commands directly</p>
             </div>
             
             <div class="feature-grid">
@@ -2462,9 +2429,9 @@ function showInfo() {
                     <p>Clickable profile links</p>
                 </div>
                 <div class="feature">
-                    <div class="feature-icon">💾</div>
+                    <div class="feature-icon">🛡️</div>
                     <h3>Admin System</h3>
-                    <p>All admin commands in /admin</p>
+                    <p>Direct admin commands</p>
                 </div>
                 <div class="feature">
                     <div class="feature-icon">📢</div>
@@ -2484,13 +2451,13 @@ function showInfo() {
                 <p><code>/stats</code> - Your statistics</p>
                 <p><code>/leaderboard</code> - Top players</p>
                 <p><code>/help</code> - Help guide</p>
-                <h4>🔧 ADMIN COMMANDS (Use with /admin):</h4>
-                <p><code>/admin addcoins USER_ID AMOUNT</code> - Add coins</p>
-                <p><code>/admin resetspins OPTION</code> - Reset spins</p>
-                <p><code>/admin userinfo USER_ID</code> - User information</p>
-                <p><code>/admin backup</code> - Create data backup</p>
-                <p><code>/admin botcast message</code> - Broadcast to all users</p>
-                <p><code>/admin help</code> - Admin commands help</p>
+                <h4>🔧 ADMIN COMMANDS:</h4>
+                <p><code>/addcoins USER_ID AMOUNT</code> - Add coins to user</p>
+                <p><code>/resetspins OPTION</code> - Reset spins (allusers/@username/ID)</p>
+                <p><code>/userinfo USER_ID</code> - Get user information</p>
+                <p><code>/backup</code> - Create data backup</p>
+                <p><code>/botcast message</code> - Broadcast to all users</p>
+                <p><code>/admin</code> - Admin panel</p>
             </div>
             
             <div class="status success">
@@ -2499,11 +2466,11 @@ function showInfo() {
                 • 👤 <b>Smart Mentions:</b> All users are mentioned with clickable profile links<br>
                 • 🔗 <b>Group Links:</b> Clickable links to jump to robbery location<br>
                 • 💬 <b>Reply System:</b> Bot replies to user commands<br>
-                • 🛡️ <b>Admin System:</b> All admin commands now through /admin only<br>
+                • 🛡️ <b>Direct Admin Commands:</b> Admin can use commands without /admin prefix<br>
                 • 🚨 <b>/rob Command:</b> Use /rob instead of /steal<br>
                 • 💰 <b>/bal Only:</b> Removed /coins command<br>
                 • 📢 <b>Broadcast:</b> Send messages to all users<br>
-                • 🔄 <b>Restore Removed:</b> restore and restoredirect commands removed
+                • 🔄 <b>Direct Commands:</b> Admin can use <code>/addcoins</code>, <code>/resetspins</code> directly
             </div>
         </div>
     </body>
