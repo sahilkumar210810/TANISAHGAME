@@ -11,7 +11,7 @@ function getWelcomeMessage() {
     return "🎉 *Welcome to Tanisah Bot!*\n\n" .
            "This is a gaming bot where you can:\n" .
            "• Earn Tanu Coins through games\n" .
-           "• Rob coins from other players\n" .
+           "• Steal coins from other players\n" .
            "• Protect your coins in Safe Zone\n" .
            "• See top players ranking\n\n" .
            "Click the buttons below to get started:";
@@ -242,16 +242,18 @@ function getAdminPanelMessage($data) {
            "• Total Tanu Coins: {$totalCoins}\n" .
            "• Daily Spins Used: " . ($data['system']['total_spins_today'] ?? 0) . "\n" .
            "• Daily Games Played: " . ($data['system']['total_games_today'] ?? 0) . "\n\n" .
-           "⚙️ *Admin Commands:*\n" .
-           "• `/addcoins USER_ID AMOUNT` - Add coins\n" .
-           "• `/resetspins` - Reset spins options\n" .
-           "• `/userinfo USER_ID` - User information\n" .
-           "• `/leaderboard` - Top players\n\n" .
-           "🔄 *Reset Spins Methods:*\n" .
-           "1. Reply to user + `/resetspins`\n" .
-           "2. `/resetspins @username`\n" .
-           "3. `/resetspins USER_ID`\n" .
-           "4. `/resetspins allusers` (ALL users)\n\n" .
+           "⚙️ *Admin Commands (use with /admin):*\n" .
+           "• `/admin addcoins USER_ID AMOUNT` - Add coins\n" .
+           "• `/admin resetspins OPTION` - Reset spins\n" .
+           "• `/admin userinfo USER_ID` - User information\n" .
+           "• `/admin backup` - Create data backup\n" .
+           "• `/admin botcast MESSAGE` - Broadcast message\n" .
+           "• `/admin help` - Admin commands help\n\n" .
+           "🔄 *Reset Spins Options:*\n" .
+           "1. Reply to user + `/admin resetspins`\n" .
+           "2. `/admin resetspins @username`\n" .
+           "3. `/admin resetspins USER_ID`\n" .
+           "4. `/admin resetspins allusers` (ALL users)\n\n" .
            "⚠️ *For Owner Use Only*";
 }
 
@@ -261,11 +263,11 @@ function getAdminPanelMessage($data) {
 function getResetSpinsMessage() {
     return "🔄 *RESET SPINS OPTIONS*\n\n" .
            "1️⃣ *Reset single user:*\n" .
-           "   • Reply to user's message: `/resetspins`\n" .
-           "   • Or use: `/resetspins @username`\n" .
-           "   • Or use: `/resetspins USER_ID`\n\n" .
+           "   • Reply to user's message: `/admin resetspins`\n" .
+           "   • Or use: `/admin resetspins @username`\n" .
+           "   • Or use: `/admin resetspins USER_ID`\n\n" .
            "2️⃣ *Reset ALL users:*\n" .
-           "   • `/resetspins allusers`\n\n" .
+           "   • `/admin resetspins allusers`\n\n" .
            "📢 *All reset users will receive notification*";
 }
 
@@ -419,17 +421,5 @@ function getGroupOwnBalanceMessage($user, $userId) {
     $message .= "💎 <b>Balance:</b> " . number_format($coins) . " Tanu Coins\n\n";
         
     return $message;
-}
-
-/**
- * Get backup instructions message
- */
-function getBackupInstructionsMessage() {
-    return "📂 *BACKUP & RESTORE*\n\n" .
-           "Available commands:\n\n" .
-           "🔸 */backup* - Create backup of all user data\n" .
-           "🔸 */restore* - Restore data from backup file\n" .
-           "🔸 */botcast <message>* - Send message to all users\n\n" .
-           "⚠️ *Admin only commands*";
 }
 ?>
