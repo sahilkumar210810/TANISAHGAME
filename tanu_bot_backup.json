@@ -1,0 +1,37 @@
+{
+    "users": {
+        "5374210828": {
+            "id": 5374210828,
+            "username": "",
+            "first_name": "\u2500\u1d25\ufe0e\ufe0e\ufe0e\ud83d\udd25\u0f0e\u302d\u302c\ud83c\uddf8 \u200c\u1d00\u1ab5\u20ea\u0529\u20ea\u1ab3\u026a\u20eaL \u2e3d\u20df\u20ea\u20dd\u26e7\u0656\u0656\u0656\u0656\u0656\u0656\u065c\u0656\u0656\u0656\u0656\u0656\u0656\u065c\u0656\u0656\u0656\u0656\u0656\u0656\u065c\u0656\u0656",
+            "is_bot": false,
+            "last_active": "2026-01-10 21:53:06",
+            "coins": 500,
+            "got_welcome_bonus": false,
+            "daily_spins": 0,
+            "games_played": {
+                "spin_wheel": 0
+            },
+            "safe_zone": {
+                "active": false,
+                "type": null,
+                "activated_at": null,
+                "expires_at": null,
+                "coins_deposited": 0
+            },
+            "total_robberies": 0,
+            "total_stolen": 0,
+            "failed_robberies": 0,
+            "last_robbery": 0,
+            "last_spin": 0,
+            "created_at": "2026-01-10 21:53:06",
+            "auto_created": false,
+            "has_started": true
+        }
+    },
+    "system": {
+        "total_spins_today": 0,
+        "total_games_today": 0,
+        "last_reset": "2026-01-10"
+    }
+}
