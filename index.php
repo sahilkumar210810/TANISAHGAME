@@ -579,7 +579,13 @@ function handleMessage($message) {
         case strpos($text, '/botcast ') === 0 && $userId == ADMIN_ID:
             handleBotcastCommand($chatId, $text, $message['message_id']);
             break;
-            
+            // ✅ NEW: GITHUB RESTORE COMMAND - YAHAN ADD KARNA HAI
+        case $text === '/githubrestore' && $userId == ADMIN_ID:
+        handleGitHubRestore($chatId, $message['message_id']);
+            break;
+        
+        // ✅ UPDATE YAHAN KARNA HAI: githubrestore ko array mein add karna
+        case in_array(explode(' ', $text)[0], ['/admin', '/addcoins', '/resetspins', '/userinfo', '/backup', '/botcast', '/githubrestore']) && $userId != ADMIN_ID:    
         // For non-admin users trying admin commands
         case in_array(explode(' ', $text)[0], ['/admin', '/addcoins', '/resetspins', '/userinfo', '/backup', '/botcast']) && $userId != ADMIN_ID:
             // NO RESPONSE - Bot won't reply to non-admins for admin commands
@@ -2056,6 +2062,61 @@ function handleCallbackQuery($callbackQuery) {
                 'parse_mode' => 'Markdown'
             ]);
             break;
+    
+        // ✅ NEW: GitHub restore confirmation - YAHAN ADD KARNA HAI
+        case 'confirm_github_restore':
+            // Update message to show processing
+            apiRequest('editMessageText', [
+                'chat_id' => $chatId,
+                'message_id' => $messageId,
+                'text' => "🔄 *RESTORING FROM GITHUB...*\n\n⏳ Please wait...",
+                'parse_mode' => 'Markdown'
+            ]);
+            
+            // Restore from GitHub
+            $result = restoreFromGitHub();
+            
+            if ($result && isset($result['success']) && $result['success']) {
+                $successMsg = "✅ *GITHUB RESTORE COMPLETED!*\n\n" .
+                             "📊 *Restored Stats:*\n" .
+                             "👥 Users: {$result['users']}\n" .
+                             "💰 Total Coins: " . number_format($result['total_coins']) . "\n" .
+                             "📁 Source: {$result['source']}\n\n" .
+                             "🎮 Bot is now using the restored data from GitHub!\n" .
+                             "✅ Previous data was backed up.";
+                
+                apiRequest('editMessageText', [
+                    'chat_id' => $chatId,
+                    'message_id' => $messageId,
+                    'text' => $successMsg,
+                    'parse_mode' => 'Markdown'
+                ]);
+            } else {
+                $errorMsg = "❌ *GITHUB RESTORE FAILED!*\n\n" .
+                           "Could not restore from GitHub.\n" .
+                           "Possible issues:\n" .
+                           "• Invalid GitHub URL\n" .
+                           "• File not found or private repo\n" .
+                           "• Network error\n\n" .
+                           "Check GitHub URL in config.php";
+                
+                apiRequest('editMessageText', [
+                    'chat_id' => $chatId,
+                    'message_id' => $messageId,
+                    'text' => $errorMsg,
+                    'parse_mode' => 'Markdown'
+                ]);
+            }
+            break;
+            
+        case 'cancel_github_restore':
+            apiRequest('editMessageText', [
+                'chat_id' => $chatId,
+                'message_id' => $messageId,
+                'text' => "❌ *GITHUB RESTORE CANCELLED*",
+                'parse_mode' => 'Markdown'
+            ]);
+            break;
     }
     
     // Answer callback query
@@ -2477,3 +2538,4 @@ function showInfo() {
     </html>';
 }
 ?>
+
