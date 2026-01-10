@@ -1,12 +1,147 @@
 <?php
 /**
  * BACKUP FUNCTIONS FILE
- * Functions for backup and broadcast only
- * Restore functions have been removed
+ * Functions for backup, broadcast and GitHub restore
  */
 
 // ============================================
-// BACKUP SYSTEM
+// GITHUB RESTORE SYSTEM
+// ============================================
+
+/**
+ * Restore data from GitHub backup file
+ */
+function restoreFromGitHub() {
+    $githubUrl = GITHUB_BACKUP_URL;
+    
+    error_log("=== Starting GitHub Restore ===");
+    error_log("GitHub URL: {$githubUrl}");
+    
+    // Download file from GitHub
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $githubUrl);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0');
+    
+    // If GitHub token is set (for private repos)
+    if (!empty(GITHUB_TOKEN)) {
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Authorization: token ' . GITHUB_TOKEN
+        ]);
+    }
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $error = curl_error($ch);
+    
+    curl_close($ch);
+    
+    if ($error) {
+        error_log("CURL Error: {$error}");
+        return false;
+    }
+    
+    if ($httpCode !== 200) {
+        error_log("HTTP Error: {$httpCode}");
+        return false;
+    }
+    
+    if (empty($response)) {
+        error_log("Empty response from GitHub");
+        return false;
+    }
+    
+    // Validate JSON
+    $jsonData = json_decode($response, true);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        error_log("Invalid JSON from GitHub: " . json_last_error_msg());
+        return false;
+    }
+    
+    // Validate structure
+    if (!isset($jsonData['users']) || !isset($jsonData['system'])) {
+        error_log("Invalid JSON structure from GitHub");
+        return false;
+    }
+    
+    // Backup current data
+    $currentFile = __DIR__ . '/users_backup.json';
+    if (file_exists($currentFile)) {
+        $backupDir = __DIR__ . '/backups';
+        if (!file_exists($backupDir)) {
+            mkdir($backupDir, 0755, true);
+        }
+        
+        $backupName = $backupDir . '/pre_github_restore_' . date('Ymd_His') . '.json';
+        copy($currentFile, $backupName);
+        error_log("Current data backed up to: {$backupName}");
+    }
+    
+    // Write new data
+    $result = file_put_contents($currentFile, json_encode($jsonData, JSON_PRETTY_PRINT));
+    
+    if ($result === false) {
+        error_log("Failed to write to users_backup.json");
+        return false;
+    }
+    
+    chmod($currentFile, 0664);
+    
+    // Get stats
+    $userCount = count($jsonData['users']);
+    $totalCoins = 0;
+    foreach ($jsonData['users'] as $user) {
+        $totalCoins += $user['coins'] ?? 0;
+    }
+    
+    error_log("✅ GitHub Restore Completed!");
+    error_log("Users restored: {$userCount}");
+    error_log("Total coins: {$totalCoins}");
+    
+    return [
+        'success' => true,
+        'users' => $userCount,
+        'total_coins' => $totalCoins,
+        'source' => 'GitHub'
+    ];
+}
+
+/**
+ * Handle GitHub restore command
+ */
+function handleGitHubRestore($chatId, $messageId) {
+    // Check if user is admin
+    global $GLOBALS;
+    $userId = $GLOBALS['current_user_id'] ?? 0;
+    
+    if ($userId != ADMIN_ID) {
+        sendReplyMessage($chatId, "❌ *ACCESS DENIED!*\n\nOnly bot admin can use this command.", $messageId, 'Markdown');
+        return;
+    }
+    
+    // Ask for confirmation
+    $confirmMsg = "🔄 *GITHUB RESTORE CONFIRMATION*\n\n" .
+                  "⚠️ *WARNING:* This will:\n" .
+                  "• Fetch data from GitHub: `" . GITHUB_BACKUP_URL . "`\n" .
+                  "• Replace ALL current user data\n" .
+                  "• Current data will be backed up first\n" .
+                  "• Cannot be undone\n\n" .
+                  "Are you sure you want to restore from GitHub?";
+    
+    sendReplyMessage($chatId, $confirmMsg, $messageId, 'Markdown', [
+        'inline_keyboard' => [
+            [
+                ['text' => '✅ Yes, Restore from GitHub', 'callback_data' => 'confirm_github_restore'],
+                ['text' => '❌ Cancel', 'callback_data' => 'cancel_github_restore']
+            ]
+        ]
+    ]);
+}
+
+// ============================================
+// BACKUP SYSTEM (SAME AS BEFORE)
 // ============================================
 
 /**
@@ -118,7 +253,7 @@ function sendBackupToTelegram() {
 }
 
 // ============================================
-// BOTCAST SYSTEM
+// BOTCAST SYSTEM (SAME AS BEFORE)
 // ============================================
 
 /**
