@@ -1214,8 +1214,12 @@ function showAdminPanel($chatId, $replyToMsgId = null) {
 function handleAddCoins($chatId, $text, $message = null, $replyToMsgId = null) {
     $parts = explode(' ', $text);
     
-    // Case 1: Add coins by reply
-    if (count($parts) === 2 && isset($message['reply_to_message'])) {
+    // DEBUG: Log for troubleshooting
+    error_log("AddCoins Debug: Text = '{$text}', Parts count = " . count($parts));
+    error_log("AddCoins Debug: Has reply? " . (isset($message['reply_to_message']) ? 'YES' : 'NO'));
+    
+    // Case 1: Add coins by reply (Format: /addcoins AMOUNT when replying)
+    if (isset($message['reply_to_message']) && count($parts) === 2) {
         // Format: /addcoins AMOUNT (when replying to a user)
         $targetUserId = $message['reply_to_message']['from']['id'];
         $targetIsBot = $message['reply_to_message']['from']['is_bot'] ?? false;
@@ -1296,7 +1300,10 @@ function handleAddCoins($chatId, $text, $message = null, $replyToMsgId = null) {
                    "📝 *Examples:*\n" .
                    "• `/addcoins 123456 1000`\n" .
                    "• `/addcoins @username 500`\n" .
-                   "• Reply to user + `/addcoins 2000`";
+                   "• Reply to user + `/addcoins 2000`\n\n" .
+                   "⚠️ *For Reply Method:*\n" .
+                   "1. Reply to user's message\n" .
+                   "2. Type only: `/addcoins AMOUNT`";
         if ($replyToMsgId) {
             sendReplyMessage($chatId, $errorMsg, $replyToMsgId, 'Markdown');
         } else {
@@ -2672,5 +2679,6 @@ function showInfo() {
     </html>';
 }
 ?>
+
 
 
