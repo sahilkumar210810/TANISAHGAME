@@ -61,9 +61,9 @@ define('ADMIN_ID', $adminId);
 define('BOT_USERNAME', $botUsername);
 define('DATA_GROUP_ID', $dataGroupId);
 
-// Error Reporting
+// Error Reporting - DEBUG MODE ON
 error_reporting(E_ALL);
-ini_set('display_errors', 0);
+ini_set('display_errors', 1); // Debugging के लिए ON रखें
 ini_set('log_errors', 1);
 ini_set('error_log', __DIR__ . '/error.log');
 
@@ -71,4 +71,10 @@ ini_set('error_log', __DIR__ . '/error.log');
 if (!isset($_SESSION)) {
     session_start();
 }
+
+// DEBUG: Log startup
+error_log("=== BOT STARTED at " . date('Y-m-d H:i:s') . " ===");
+error_log("Admin ID: " . ADMIN_ID);
+error_log("Backup Channel ID: " . BACKUP_CHANNEL_ID);
+error_log("Bot Token set: " . (!empty(BOT_TOKEN) ? 'Yes' : 'No'));
 ?>
