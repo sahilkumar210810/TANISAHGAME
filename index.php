@@ -1209,13 +1209,94 @@ function showAdminPanel($chatId, $replyToMsgId = null) {
 }
 
 /**
- * Handle Add Coins (Admin)
+ * Handle Add Coins (Admin) - UPDATED: Now supports USER_ID, @username, and REPLY
  */
-function handleAddCoins($chatId, $text, $replyToMsgId = null) {
+function handleAddCoins($chatId, $text, $message = null, $replyToMsgId = null) {
     $parts = explode(' ', $text);
     
+    // Case 1: Add coins by reply
+    if (count($parts) === 2 && isset($message['reply_to_message'])) {
+        // Format: /addcoins AMOUNT (when replying to a user)
+        $targetUserId = $message['reply_to_message']['from']['id'];
+        $targetIsBot = $message['reply_to_message']['from']['is_bot'] ?? false;
+        $amount = intval($parts[1]);
+        
+        // Check if target is a bot
+        if ($targetIsBot) {
+            $errorMsg = "❌ Cannot add coins to a bot!";
+            if ($replyToMsgId) {
+                sendReplyMessage($chatId, $errorMsg, $replyToMsgId, 'Markdown');
+            } else {
+                sendMessage($chatId, $errorMsg, 'Markdown');
+            }
+            return;
+        }
+        
+        // Validate amount
+        if ($amount <= 0) {
+            $errorMsg = "❌ Amount must be positive!";
+            if ($replyToMsgId) {
+                sendReplyMessage($chatId, $errorMsg, $replyToMsgId, 'Markdown');
+            } else {
+                sendMessage($chatId, $errorMsg, 'Markdown');
+            }
+            return;
+        }
+        
+        $data = getUsersData();
+        
+        // AUTO CREATE USER IF NOT EXISTS
+        if (!isset($data['users'][$targetUserId])) {
+            $targetUserData = [
+                'username' => $message['reply_to_message']['from']['username'] ?? '',
+                'first_name' => $message['reply_to_message']['from']['first_name'] ?? '',
+                'is_bot' => $targetIsBot
+            ];
+            $user = getUser($targetUserId, $targetUserData, $targetIsBot);
+            $data = getUsersData(); // Reload
+        }
+        
+        // Add coins
+        $oldCoins = $data['users'][$targetUserId]['coins'];
+        $data['users'][$targetUserId]['coins'] += $amount;
+        
+        saveUsersData($data);
+        
+        // Get username with mention
+        $username = $data['users'][$targetUserId]['username'] ? 
+                   "@" . $data['users'][$targetUserId]['username'] : 
+                   "<a href=\"tg://user?id={$targetUserId}\">" . htmlspecialchars($data['users'][$targetUserId]['first_name'] ?? "User") . "</a>";
+        
+        $successMsg = "✅ *Coins Added via Reply!*\n\n" .
+                     "👤 User: {$username}\n" .
+                     "🆔 ID: `{$targetUserId}`\n" .
+                     "💰 Amount: {$amount} Tanu Coins\n" .
+                     "📈 Old Balance: {$oldCoins}\n" .
+                     "💎 New Balance: " . $data['users'][$targetUserId]['coins'] . " Tanu Coins\n" .
+                     "📢 User has been notified.";
+        
+        if ($replyToMsgId) {
+            sendReplyMessage($chatId, $successMsg, $replyToMsgId, 'HTML');
+        } else {
+            sendMessage($chatId, $successMsg, 'HTML');
+        }
+        
+        // Notify user
+        sendMessage($targetUserId, "🎁 *ADMIN GIFT!*\n\nYou received {$amount} Tanu Coins from admin!\n💎 New balance: " . $data['users'][$targetUserId]['coins'] . " Tanu Coins", 'Markdown');
+        return;
+    }
+    
+    // Case 2: Original format (USER_ID AMOUNT) or (@username AMOUNT)
     if (count($parts) !== 3) {
-        $errorMsg = "❌ *Invalid format!*\n\nUsage: `/addcoins USER_ID AMOUNT`";
+        $errorMsg = "❌ *Invalid format!*\n\n" .
+                   "✅ *Usage:*\n" .
+                   "1. `/addcoins USER_ID AMOUNT`\n" .
+                   "2. `/addcoins @username AMOUNT`\n" .
+                   "3. Reply to user + `/addcoins AMOUNT`\n\n" .
+                   "📝 *Examples:*\n" .
+                   "• `/addcoins 123456 1000`\n" .
+                   "• `/addcoins @username 500`\n" .
+                   "• Reply to user + `/addcoins 2000`";
         if ($replyToMsgId) {
             sendReplyMessage($chatId, $errorMsg, $replyToMsgId, 'Markdown');
         } else {
@@ -1224,7 +1305,7 @@ function handleAddCoins($chatId, $text, $replyToMsgId = null) {
         return;
     }
     
-    $targetId = $parts[1];
+    $target = $parts[1];
     $amount = intval($parts[2]);
     
     if ($amount <= 0) {
@@ -1239,42 +1320,95 @@ function handleAddCoins($chatId, $text, $replyToMsgId = null) {
     
     $data = getUsersData();
     
-    // AUTO CREATE USER IF NOT EXISTS
-    if (!isset($data['users'][$targetId])) {
-        $userData = ['is_bot' => false];
-        $user = getUser($targetId, $userData, false);
-        $data = getUsersData(); // Reload
-    }
-    
-    // Check if user is a bot
-    if (isset($data['users'][$targetId]['is_bot']) && $data['users'][$targetId]['is_bot']) {
-        $errorMsg = "❌ Cannot add coins to a bot!";
-        if ($replyToMsgId) {
-            sendReplyMessage($chatId, $errorMsg, $replyToMsgId, 'Markdown');
-        } else {
-            sendMessage($chatId, $errorMsg, 'Markdown');
+    // Check if target is @username
+    if (strpos($target, '@') === 0) {
+        $username = str_replace('@', '', $target);
+        $foundUserId = null;
+        
+        // Find user by username
+        foreach ($data['users'] as $userId => $user) {
+            if (strtolower($user['username'] ?? '') === strtolower($username)) {
+                // Skip if user is a bot
+                if (isset($user['is_bot']) && $user['is_bot']) {
+                    $errorMsg = "❌ Cannot add coins to a bot!";
+                    if ($replyToMsgId) {
+                        sendReplyMessage($chatId, $errorMsg, $replyToMsgId, 'Markdown');
+                    } else {
+                        sendMessage($chatId, $errorMsg, 'Markdown');
+                    }
+                    return;
+                }
+                $foundUserId = $userId;
+                break;
+            }
         }
-        return;
+        
+        if (!$foundUserId) {
+            $errorMsg = "❌ User @{$username} not found!";
+            if ($replyToMsgId) {
+                sendReplyMessage($chatId, $errorMsg, $replyToMsgId, 'Markdown');
+            } else {
+                sendMessage($chatId, $errorMsg, 'Markdown');
+            }
+            return;
+        }
+        
+        $targetUserId = $foundUserId;
+        
+    } else {
+        // Assume it's a user ID
+        $targetUserId = $target;
+        
+        // AUTO CREATE USER IF NOT EXISTS
+        if (!isset($data['users'][$targetUserId])) {
+            $userData = ['is_bot' => false];
+            $user = getUser($targetUserId, $userData, false);
+            $data = getUsersData(); // Reload
+        }
+        
+        // Check if user is a bot
+        if (isset($data['users'][$targetUserId]['is_bot']) && $data['users'][$targetUserId]['is_bot']) {
+            $errorMsg = "❌ Cannot add coins to a bot!";
+            if ($replyToMsgId) {
+                sendReplyMessage($chatId, $errorMsg, $replyToMsgId, 'Markdown');
+            } else {
+                sendMessage($chatId, $errorMsg, 'Markdown');
+            }
+            return;
+        }
     }
     
     // Add coins
-    $data['users'][$targetId]['coins'] += $amount;
+    $oldCoins = $data['users'][$targetUserId]['coins'];
+    $data['users'][$targetUserId]['coins'] += $amount;
     
     saveUsersData($data);
     
+    // Get username for display
+    if (isset($username)) {
+        $displayName = "@{$username}";
+    } else {
+        $displayName = $data['users'][$targetUserId]['username'] ? 
+                      "@" . $data['users'][$targetUserId]['username'] : 
+                      "<a href=\"tg://user?id={$targetUserId}\">" . htmlspecialchars($data['users'][$targetUserId]['first_name'] ?? "User") . "</a>";
+    }
+    
     $successMsg = "✅ *Coins Added!*\n\n" .
-                 "👤 User ID: `{$targetId}`\n" .
+                 "👤 User: {$displayName}\n" .
+                 "🆔 ID: `{$targetUserId}`\n" .
                  "💰 Amount: {$amount} Tanu Coins\n" .
-                 "💎 New Balance: " . $data['users'][$targetId]['coins'] . " Tanu Coins";
+                 "📈 Old Balance: {$oldCoins}\n" .
+                 "💎 New Balance: " . $data['users'][$targetUserId]['coins'] . " Tanu Coins\n" .
+                 "📢 User has been notified.";
     
     if ($replyToMsgId) {
-        sendReplyMessage($chatId, $successMsg, $replyToMsgId, 'Markdown');
+        sendReplyMessage($chatId, $successMsg, $replyToMsgId, (isset($username) ? 'Markdown' : 'HTML'));
     } else {
-        sendMessage($chatId, $successMsg, 'Markdown');
+        sendMessage($chatId, $successMsg, (isset($username) ? 'Markdown' : 'HTML'));
     }
     
     // Notify user
-    sendMessage($targetId, "🎁 *ADMIN GIFT!*\n\nYou received {$amount} Tanu Coins from admin!\n💎 New balance: " . $data['users'][$targetId]['coins'] . " Tanu Coins", 'Markdown');
+    sendMessage($targetUserId, "🎁 *ADMIN GIFT!*\n\nYou received {$amount} Tanu Coins from admin!\n💎 New balance: " . $data['users'][$targetUserId]['coins'] . " Tanu Coins", 'Markdown');
 }
 
 /**
@@ -2538,4 +2672,5 @@ function showInfo() {
     </html>';
 }
 ?>
+
 
