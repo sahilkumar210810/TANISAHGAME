@@ -37,6 +37,10 @@ define('REPLY_TO_MESSAGES', true); // Always reply to user messages
 define('BACKUP_CHANNEL_ID', -1001904949193); // अपना backup channel ID यहाँ डालें
 define('BOTCAST_COOLDOWN', 300); // 5 minutes between botcasts
 
+// NEW: GitHub Backup Settings
+define('GITHUB_BACKUP_URL', 'https://raw.githubusercontent.com/sahilkumar210810/TANISAHGAME/main/tanu_bot_backup.json');
+define('GITHUB_TOKEN', ''); // Optional, only for private repos
+
 // Spin Wheel Prizes
 $SPIN_PRIZES = [
     ['amount' => 50, 'chance' => 35, 'text' => '💰 50 Tanu Coins', 'emoji' => '🟢'],
@@ -61,9 +65,9 @@ define('ADMIN_ID', $adminId);
 define('BOT_USERNAME', $botUsername);
 define('DATA_GROUP_ID', $dataGroupId);
 
-// Error Reporting - DEBUG MODE ON
+// Error Reporting
 error_reporting(E_ALL);
-ini_set('display_errors', 1); // Debugging के लिए ON रखें
+ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 ini_set('error_log', __DIR__ . '/error.log');
 
@@ -71,10 +75,4 @@ ini_set('error_log', __DIR__ . '/error.log');
 if (!isset($_SESSION)) {
     session_start();
 }
-
-// DEBUG: Log startup
-error_log("=== BOT STARTED at " . date('Y-m-d H:i:s') . " ===");
-error_log("Admin ID: " . ADMIN_ID);
-error_log("Backup Channel ID: " . BACKUP_CHANNEL_ID);
-error_log("Bot Token set: " . (!empty(BOT_TOKEN) ? 'Yes' : 'No'));
 ?>
