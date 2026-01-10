@@ -423,17 +423,27 @@ function broadcastToAllUsers($messageText, $adminId) {
  * Handle botcast command
  */
 function handleBotcastCommand($chatId, $text, $messageId) {
-    // Check if user is admin
-    global $GLOBALS;
-    $userId = $GLOBALS['current_user_id'] ?? 0;
-    
-    if ($userId != ADMIN_ID) {
-        sendReplyMessage($chatId, "❌ *ACCESS DENIED!*\n\nOnly bot admin can use this command.", $messageId, 'Markdown');
+    // Get user ID directly from message
+    $update = $GLOBALS['update'] ?? null;
+    if (!$update) {
+        error_log("No update in globals");
         return;
     }
     
+    $userId = 0;
+    if (isset($update['message']['from']['id'])) {
+        $userId = $update['message']['from']['id'];
+    }
+    
+    error_log("Botcast - User ID: {$userId}, Admin ID: " . ADMIN_ID);
+    
+    // Check if user is admin
+    if ($userId != ADMIN_ID) {
+        error_log("Non-admin tried botcast: {$userId}");
+        return; // Silent for non-admins
+    }
+    
     // Extract message from command
-    // Format: /botcast Your message here
     $parts = explode(' ', $text, 2);
     
     if (count($parts) < 2) {
@@ -473,23 +483,47 @@ function handleBotcastCommand($chatId, $text, $messageId) {
 }
 
 /**
- * Handle restore command - IMPROVED VERSION
+ * Handle restore command - FIXED VERSION
  */
 function handleRestoreCommand($chatId, $text, $message, $messageId) {
-    // Check if user is admin
-    global $GLOBALS;
-    $userId = $GLOBALS['current_user_id'] ?? 0;
+    error_log("=== RESTORE COMMAND CALLED ===");
+    error_log("Chat ID: {$chatId}");
+    error_log("Message ID: {$messageId}");
     
-    if ($userId != ADMIN_ID) {
-        sendReplyMessage($chatId, "❌ *ACCESS DENIED!*\n\nOnly bot admin can use this command.", $messageId, 'Markdown');
+    // Get user ID properly
+    $update = $GLOBALS['update'] ?? null;
+    if (!$update) {
+        error_log("ERROR: No update in globals");
+        // Send error message
+        sendReplyMessage($chatId, "❌ System error. Please try again.", $messageId, 'Markdown');
         return;
     }
     
-    error_log("Restore command called by admin: {$userId}");
+    $userId = 0;
+    if (isset($update['message']['from']['id'])) {
+        $userId = $update['message']['from']['id'];
+    }
+    
+    error_log("User ID from update: {$userId}");
+    error_log("Admin ID from config: " . ADMIN_ID);
+    
+    // Check if user is admin
+    if ($userId != ADMIN_ID) {
+        error_log("Non-admin user tried /restore: {$userId}");
+        // Send message to admin only, silent for others
+        if ($userId == ADMIN_ID) {
+            sendReplyMessage($chatId, 
+                "❌ *ACCESS DENIED!*\n\nOnly bot admin can use this command.", 
+                $messageId, 'Markdown');
+        }
+        return;
+    }
+    
+    error_log("Admin verified, proceeding with restore...");
     
     // Check if replying to a backup file
     if (!isset($message['reply_to_message'])) {
-        error_log("Not replying to any message");
+        error_log("No reply message found");
         $instructions = "📂 *RESTORE BACKUP INSTRUCTIONS*\n\n" .
                        "1. Go to your backup channel\n" .
                        "2. Find a backup file (tanu_bot_backup_*.json)\n" .
@@ -502,7 +536,7 @@ function handleRestoreCommand($chatId, $text, $message, $messageId) {
     }
     
     $replyMsg = $message['reply_to_message'];
-    error_log("Reply message type: " . ($replyMsg['document'] ? 'document' : 'not document'));
+    error_log("Reply message found");
     
     if (!isset($replyMsg['document'])) {
         error_log("Reply message doesn't contain a document");
@@ -552,16 +586,30 @@ function handleRestoreCommand($chatId, $text, $message, $messageId) {
 }
 
 /**
- * Handle manual backup command
+ * Handle manual backup command - FIXED
  */
 function handleBackupCommand($chatId, $messageId) {
-    // Check if user is admin
-    global $GLOBALS;
-    $userId = $GLOBALS['current_user_id'] ?? 0;
+    error_log("=== BACKUP COMMAND CALLED ===");
     
-    if ($userId != ADMIN_ID) {
-        sendReplyMessage($chatId, "❌ *ACCESS DENIED!*\n\nOnly bot admin can use this command.", $messageId, 'Markdown');
+    // Get user ID properly
+    $update = $GLOBALS['update'] ?? null;
+    if (!$update) {
+        error_log("ERROR: No update in globals");
+        sendReplyMessage($chatId, "❌ System error. Please try again.", $messageId, 'Markdown');
         return;
+    }
+    
+    $userId = 0;
+    if (isset($update['message']['from']['id'])) {
+        $userId = $update['message']['from']['id'];
+    }
+    
+    error_log("Backup - User ID: {$userId}");
+    
+    // Check if user is admin
+    if ($userId != ADMIN_ID) {
+        error_log("Non-admin tried backup: {$userId}");
+        return; // Silent for non-admins
     }
     
     // Send processing message
@@ -613,15 +661,35 @@ function handleBackupCommand($chatId, $messageId) {
 }
 
 /**
- * Handle direct restore from uploaded file (alternative method)
+ * Handle direct restore from uploaded file (alternative method) - FIXED
  */
 function handleDirectRestore($chatId, $message, $messageId) {
-    // Check if user is admin
-    global $GLOBALS;
-    $userId = $GLOBALS['current_user_id'] ?? 0;
+    error_log("=== DIRECT RESTORE COMMAND CALLED ===");
     
+    // Get user ID properly
+    $update = $GLOBALS['update'] ?? null;
+    if (!$update) {
+        error_log("ERROR: No update in globals");
+        sendReplyMessage($chatId, "❌ System error. Please try again.", $messageId, 'Markdown');
+        return;
+    }
+    
+    $userId = 0;
+    if (isset($update['message']['from']['id'])) {
+        $userId = $update['message']['from']['id'];
+    }
+    
+    error_log("Direct restore - User ID: {$userId}");
+    
+    // Check if user is admin
     if ($userId != ADMIN_ID) {
-        sendReplyMessage($chatId, "❌ *ACCESS DENIED!*\n\nOnly bot admin can use this command.", $messageId, 'Markdown');
+        error_log("Non-admin tried direct restore: {$userId}");
+        // Send message to admin only
+        if ($userId == ADMIN_ID) {
+            sendReplyMessage($chatId, 
+                "❌ *ACCESS DENIED!*\n\nOnly bot admin can use this command.", 
+                $messageId, 'Markdown');
+        }
         return;
     }
     
