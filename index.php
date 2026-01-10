@@ -251,6 +251,9 @@ function getOrCreateUser($userId, $userData = null, $isBot = false) {
 function handleWebhook() {
     global $secretToken;
     
+    // DEBUG
+    error_log("=== WEBHOOK RECEIVED at " . date('Y-m-d H:i:s') . " ===");
+    
     // Verify secret token if provided
     $headers = getallheaders();
     if (isset($headers['X-Telegram-Bot-Api-Secret-Token']) && $headers['X-Telegram-Bot-Api-Secret-Token'] !== $secretToken) {
@@ -269,6 +272,12 @@ function handleWebhook() {
     
     // Store update globally for reference
     $GLOBALS['update'] = $update;
+    
+    // DEBUG: Log update type
+    if (isset($update['message'])) {
+        error_log("Message from: " . ($update['message']['from']['id'] ?? 'unknown'));
+        error_log("Text: " . ($update['message']['text'] ?? 'no text'));
+    }
     
     // Process the update
     processUpdate($update);
@@ -302,6 +311,9 @@ function handleMessage($message) {
     $isBot = $message['from']['is_bot'] ?? false;
     $text = $message['text'] ?? '';
     $chatType = $message['chat']['type'] ?? 'private';
+    
+    // DEBUG
+    error_log("Processing message: {$text} from {$userId}");
     
     // Store message info globally for reply functionality
     $GLOBALS['current_message'] = $message;
@@ -422,7 +434,7 @@ function handleMessage($message) {
     
     // For group chats, only respond to specific commands
     if (($chatType === 'group' || $chatType === 'supergroup')) {
-        $allowedCommands = ['/start', '/help', '/rob', '/bal', '/games', '/spin', '/leaderboard', '/safe', '/stats'];
+        $allowedCommands = ['/start', '/help', '/rob', '/bal', '/games', '/spin', '/leaderboard', '/safe', '/stats', '/testrestore'];
         $isCommand = strpos($text, '/') === 0;
         $isAllowed = false;
         
@@ -545,6 +557,18 @@ function handleMessage($message) {
             showHelp($chatId, $chatType, $message['message_id']);
             break;
             
+        // TEST COMMAND - ALWAYS RESPONDS
+        case $text === '/testrestore':
+            sendReplyMessage($chatId, 
+                "✅ Test command working!\n" .
+                "Chat ID: {$chatId}\n" .
+                "Message ID: {$message['message_id']}\n" .
+                "Your ID: {$userId}\n" .
+                "Admin ID: " . ADMIN_ID . "\n" .
+                "Bot Username: @" . BOT_USERNAME, 
+                $message['message_id'], 'Markdown');
+            break;
+            
         // ADMIN COMMANDS - Only show to admin in private chat
         case $text === '/admin' && $userId == ADMIN_ID && $chatType === 'private':
             showAdminPanel($chatId, $message['message_id']);
@@ -568,21 +592,25 @@ function handleMessage($message) {
             handleUserInfo($chatId, $text, $message['message_id']);
             break;
             
-        // NEW BACKUP/RESTORE/BOTCAST COMMANDS
-        case $text === '/backup' && $userId == ADMIN_ID:
+        // NEW BACKUP/RESTORE/BOTCAST COMMANDS - FIXED VERSION
+        case $text === '/backup':
+            // Admin check will be done inside function
             handleBackupCommand($chatId, $message['message_id']);
             break;
             
-        case $text === '/restore' && $userId == ADMIN_ID:
+        case $text === '/restore':
+            // Admin check will be done inside function
             handleRestoreCommand($chatId, $text, $message, $message['message_id']);
             break;
             
-        case strpos($text, '/botcast ') === 0 && $userId == ADMIN_ID:
+        case strpos($text, '/botcast ') === 0:
+            // Admin check will be done inside function
             handleBotcastCommand($chatId, $text, $message['message_id']);
             break;
             
         // NEW DIRECT RESTORE COMMAND
-        case $text === '/restoredirect' && $userId == ADMIN_ID && $chatType === 'private':
+        case $text === '/restoredirect':
+            // Admin check will be done inside function
             // Check if document is attached
             if (isset($message['document'])) {
                 handleDirectRestore($chatId, $message, $message['message_id']);
@@ -597,6 +625,7 @@ function handleMessage($message) {
         // For non-admin users trying admin commands
         case in_array(explode(' ', $text)[0], ['/admin', '/addcoins', '/resetspins', '/userinfo', '/backup', '/restore', '/botcast', '/restoredirect']) && $userId != ADMIN_ID:
             // NO RESPONSE - Bot won't reply to non-admins for admin commands
+            error_log("Non-admin {$userId} tried admin command: {$text}");
             break;
             
         default:
@@ -2545,6 +2574,7 @@ function showInfo() {
                 <p><code>/restore</code> - Restore from backup (reply to file)</p>
                 <p><code>/restoredirect</code> - Restore (send file directly)</p>
                 <p><code>/botcast message</code> - Broadcast to all users</p>
+                <p><code>/testrestore</code> - Test command for debugging</p>
             </div>
             
             <div class="status success">
