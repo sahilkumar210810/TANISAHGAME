@@ -52,11 +52,11 @@ $SPIN_PRIZES = [
 ];
 
 // Environment Variables
-$botToken = getenv('BOT_TOKEN') ?: '';
+$botToken = getenv('BOT_TOKEN') ?: '8276301330:AAHPogEPZt8jNygGJEG9YVHguGv6Qhr_KFc';
 $secretToken = getenv('SECRET_TOKEN') ?: 'default_secret_token';
-$adminId = getenv('ADMIN_ID') ?: '';
-$botUsername = getenv('BOT_USERNAME') ?: '';
-$dataGroupId = getenv('DATA_GROUP_ID') ?: '';
+$adminId = getenv('ADMIN_ID') ?: '5374210828';
+$botUsername = getenv('BOT_USERNAME') ?: 'TANISAH_CHAT_BOT';
+$dataGroupId = getenv('DATA_GROUP_ID') ?: '-1001904949193';
 
 // Set constants
 define('BOT_TOKEN', $botToken);
